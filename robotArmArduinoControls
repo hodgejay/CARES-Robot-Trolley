@@ -1,0 +1,83 @@
+#include <Tic.h>
+
+TicI2C tic;
+const int blue = 8;
+const int green = 9;
+const int red = 10;
+const int stops = 1;
+int blueState;
+int greenState;
+int redState=0;
+int redLastState=0;
+int redPushCounter=-1;
+
+
+
+enum class Mode {
+  Off,
+  Position,
+  Velocity
+};
+auto mode=Mode::Off;
+
+void setup()
+{
+  pinMode(blue, INPUT);
+  pinMode(green, INPUT);
+  pinMode(red, INPUT);
+  Wire.begin();
+  tic.haltAndSetPosition(0);
+  // Give the Tic some time to start up.
+  delay(20);
+}
+
+void resetCommandTimeout() {
+  tic.resetCommandTimeout();
+}
+
+void waitForPosition(int32_t targetPosition) {
+  do {
+    resetCommandTimeout();
+  } while (tic.getCurrentPosition() != targetPosition);
+}
+
+void loop()
+{
+  blueState=digitalRead(blue);
+  greenState=digitalRead(green);
+  redState=digitalRead(red);
+  if (blueState==HIGH) {
+    redPushCounter=-1;
+    tic.setTargetVelocity(10000000);
+    mode=Mode::Velocity;
+  }
+  else {
+    tic.setTargetVelocity(0);
+    mode=Mode::Velocity;
+  }
+  if (blueState==LOW && greenState==HIGH) {
+    delay(1000);
+    tic.haltAndSetPosition(0);
+    redPushCounter=0;
+    mode=Mode::Position;
+  }
+  if (blueState==LOW && greenState==LOW && redState != redLastState) {
+    if (redState==HIGH) {
+      redPushCounter=redPushCounter+1;
+    }
+    if (redPushCounter>stops) redPushCounter=0;
+    delay(50);
+  }
+  redLastState=redState;
+  if (blueState==LOW && redPushCounter!=-1 && redPushCounter!=0){
+    tic.setTargetPosition((-8000/stops)*redPushCounter);
+    waitForPosition((-8000/stops)*redPushCounter);
+    mode=Mode::Position;
+  }
+  if (blueState==LOW && redPushCounter!=-1 && redPushCounter==0) {
+    tic.setTargetPosition(0);
+    waitForPosition(0);
+    mode=Mode::Position;
+  }
+  tic.resetCommandTimeout();
+}
