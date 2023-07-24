@@ -1,0 +1,18 @@
+import subprocess
+import yaml
+#^not necessary, it just
+
+
+
+def ticcmd(*args):
+    return subprocess.check_output(['ticcmd'] + list(args))
+
+
+status = yaml.load(ticcmd('-s', '--full'), Loader=yaml.FullLoader) #have to add the Loader thing even though the example code doesn't have it
+
+position = status['Current position']
+print("Current position is {}.".format(position))
+
+new_target = -200 if position > 0 else 200
+print("Setting target position to {}.".format(new_target))
+ticcmd('--exit-safe-start', '--position', str(new_target))
