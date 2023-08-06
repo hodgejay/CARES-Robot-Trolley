@@ -1,0 +1,71 @@
+import pyfirmata  # to communicate with the Arduino, which has standardFirmata loaded onto it through the IDE
+import subprocess  # to communicate with the computer and send commands to the tic driver
+import yaml  # this is here so that if we need to check a value in the tic driver, it sends to the output of the script
+
+if __name__ == '__main__':
+    # Initiate communication with Arduino
+    board = pyfirmata.Arduino('/dev/ttyACM0')  # whatever USB port the Arduino is plugged into goes in the parentheses
+    print("Communication Successfully started")
+
+    # Create a bunch of useful variables
+    IN1 = board.digital[2]  # IN1 on the H-Bridge goes to the 2 port on the Arduino
+    IN2 = board.digital[3]
+    upButton = board.digital[8]  # the buttons on the breadboard
+    downButton = board.digital[9]
+    leftButton = board.digital[10]
+    rightButton = board.digital[11]
+    LED = board.digital[13]  # built-in LED on the Arduino so that we can see if our button presses are being registered
+
+    # start iterator to receive input data
+    it = pyfirmata.util.Iterator(board)
+    it.start()
+
+    # Setup what are inputs and what are outputs to/from the Arduino
+    IN1.mode = pyfirmata.OUTPUT
+    IN2.mode = pyfirmata.OUTPUT
+    LED.mode = pyfirmata.OUTPUT
+    upButton.mode = pyfirmata.INPUT
+    downButton.mode = pyfirmata.INPUT
+    leftButton.mode = pyfirmata.INPUT
+    rightButton.mode = pyfirmata.INPUT
+
+    # essentially the void loop in the Arduino IDE language
+    while True:
+
+        # to get correct values for tic stuff and define the ticcmd function
+        def ticcmd(*args):
+            return subprocess.check_output(['ticcmd'] + list(args))
+
+
+        status = yaml.load(ticcmd('-s', '--full'), Loader=yaml.FullLoader)
+
+        # read if the buttons are pressed
+        upButtonState = upButton.read()
+        downButtonState = downButton.read()
+        leftButtonState = leftButton.read()
+        rightButtonState = rightButton.read()
+
+        # control the up and down motion with the pyfirmata module because the H-Bridge just needs signals from board
+        if upButtonState == 1:
+            IN1.write(1)  # in order to go forward, IN1 has to be VCC and IN2 had to be GND
+            IN2.write(0)
+        elif downButtonState == 1:
+            IN1.write(0)  # reverse the direction
+            IN2.write(1)
+        else:
+            IN1.write(0)  # just give both IN1 and IN2 GND signal
+            IN2.write(0)
+
+        # control the left and right motion with the tic commands because the stepper motor is controlled by the driver
+        if leftButtonState == 1:
+            ticcmd('--resume', '--velocity', str(10000000))  # look at ticcmd in the terminal to see all commands
+        elif rightButtonState == 1:
+            ticcmd('--resume', '--velocity', str(-10000000))
+        else:
+            ticcmd('--velocity', str(0))
+
+        # just to see if any of the buttons are being pressed so we can see if the board is getting the button signal
+        if upButtonState or downButtonState or leftButtonState or rightButtonState:
+            LED.write(1)
+        else:
+            LED.write(0)
